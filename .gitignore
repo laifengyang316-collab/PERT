@@ -1,0 +1,21 @@
+﻿# Python缓存
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 训练结果
+classifier_results/
+pretrain_results/
+*.pt
+*.pkl
+
+# 数据缓存
+*.pkl
+
+# 日志
+*.log
+
+# 压缩包
+*.zip
+*.tar.gz
