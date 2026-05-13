@@ -4,7 +4,7 @@
 
 ## 论文简介
 
-PERT是一种用于加密流量分类的新方法，它将基于Transformer的语言建模技术应用于网络数据包有效载荷。该方法分为两个阶段：
+PERT是一种用于加密流量分类的新方法，它将基于Transformer的语言建模技术应用于网络数据包有效载荷。根据论文，该方法使用**ALBERT（A Lite BERT）**架构进行优化。方法分为两个阶段：
 
 1. **预训练阶段**：在未标记的数据包上训练掩码语言模型（MLM），学习上下文表示
 2. **微调阶段**：将预训练好的编码器用于流级别的分类任务
@@ -12,8 +12,8 @@ PERT是一种用于加密流量分类的新方法，它将基于Transformer的�
 ### 关键特点
 
 - **Bigram标记化**：将字节对作为基本单位（词汇表大小：65536 + 3个特殊标记）
-- **Transformer编码器**：使用多头注意力机制捕获上下文依赖关系
-- **流级别分类**：每个流取前3个数据包，提取它们<[BOS_never_used_51bce0c785ca2f68081bfa7d91973934]> token后拼接分类
+- **ALBERT架构**：使用优化的Transformer编码器，包含跨层参数共享和分解嵌入参数化
+- **流级别分类**：每个流取前3个数据包，提取它们CLS token后拼接分类
 - **预训练+微调**：利用未标记数据提升性能
 
 ## 环境要求
@@ -35,7 +35,7 @@ pip install -r requirements.txt
 ```
 PERT/
 ├── data_processing.py      # 数据处理模块（PCAP解析、Bigram标记化）
-├── model.py                # PERT模型架构
+├── model.py                # PERT模型架构（ALBERT）
 ├── train_pretrain.py       # 掩码语言模型预训练脚本
 ├── train_classifier.py     # 流分类微调脚本
 ├── inference.py            # 推理工具
@@ -53,13 +53,14 @@ PERT/
 | 参数 | 论文值 | 说明 |
 |------|--------|------|
 | d_model | 256 | 模型维度 |
-| n_layers | 6 | Transformer层数 |
+| n_layers | 6 | ALBERT层数 |
 | n_heads | 8 | 注意力头数 |
 | d_ff | 1024 | 前馈网络维度 |
 | max_seq_len | 128 | 最大序列长度 |
 | max_packets | 3 | 每个流的数据包数 |
 | mask_prob | 0.15 | MLM掩码概率 |
 | vocab_size | 65539 | 词汇表大小(65536+3) |
+| embedding_size | 128 | ALBERT分解嵌入维度 |
 
 ### 训练参数
 
@@ -70,6 +71,14 @@ PERT/
 | batch_size | 32 | 批次大小 |
 | learning_rate | 5e-4 (pre-train) / 1e-4 (classifier) | 学习率 |
 | dropout | 0.1 | Dropout率 |
+
+## ALBERT架构说明
+
+根据论文，PERT使用ALBERT架构进行优化，主要包括：
+
+1. **跨层参数共享**：所有Transformer层共享相同的参数，显著减少模型大小
+2. **分解嵌入参数化**：将嵌入层分解为较小的维度，再投影到模型维度
+3. **Pre-LN架构**：LayerNorm应用在注意力和前馈网络之前
 
 ## 使用方法
 
@@ -208,18 +217,18 @@ A: 可以！只要按照类别组织文件夹即可。
 
 ```
 输入数据包 → Bigram标记化 → [CLS] + tokens + [PAD]
-                  ↓
-         Token Embedding + Positional Encoding
-                  ↓
-         Transformer Encoder (6层)
-                  ↓
-         <[BOS_never_used_51bce0c785ca2f68081bfa7d91973934]> Token Embedding
-                  ↓
-         （每个数据包重复以上步骤，取前3个）
-                  ↓
-         Concat: emb1 ⊕ emb2 ⊕ emb3
-                  ↓
-         Linear Layer → 12类输出
+                 ↓
+        Token Embedding (128维) → Projection (256维) + Positional Encoding
+                 ↓
+        ALBERT Encoder (6层，跨层参数共享)
+                 ↓
+         CLS Token Embedding
+                 ↓
+        （每个数据包重复以上步骤，取前3个）
+                 ↓
+        Concat: emb1 ⊕ emb2 ⊕ emb3
+                 ↓
+        Linear Layer → 12类输出
 ```
 
 ### 预训练目标
@@ -229,8 +238,8 @@ A: 可以！只要按照类别组织文件夹即可。
 ### 分类方法
 
 - 每个流取前3个数据包
-- 每个数据包独立编码，取<[BOS_never_used_51bce0c785ca2f68081bfa7d91973934]> token
-- 拼接3个<[BOS_never_used_51bce0c785ca2f68081bfa7d91973934]> token
+- 每个数据包独立编码，取CLS token
+- 拼接3个CLS token
 - 通过单层线性层分类
 
 ## 许可证
